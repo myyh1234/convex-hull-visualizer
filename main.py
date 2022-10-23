@@ -62,17 +62,6 @@ class SetCount(QWidget):
         self.speed_value = float(self.speed.value())
         self.close()
 
-pygame.init()
-WIDTH = pygame.display.Info().current_w - 100
-HEIGHT = pygame.display.Info().current_h - 100
-BTN_WIDTH = 300
-POINT_AREA = (20, 80, WIDTH - 20, HEIGHT - 20)
-
-point_count = 30
-speed = 0.5
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Convex Hull Algorithm(Graham's Scan) Visualizer")
-
 class GameButton:
     def __init__(self, txt, rect, color):
         self.x, self.y, self.w, self.h = rect
@@ -108,22 +97,11 @@ class Point:
         self.x = x
         self.y = y
     
-    def __str__(self):
-        return f'{self.x} {self.y}'
-    
     def draw(self):
         pygame.draw.circle(screen, (0,0,0), (self.x, self.y), 5)
 
     def to_tuple(self):
         return self.x, self.y
-
-btn_list = [
-    GameButton(f'설정', (WIDTH / 4 - BTN_WIDTH / 2, 10, BTN_WIDTH, 40), '#060D13'), 
-    GameButton('볼록 껍질 구하기', (WIDTH / 4 * 2 - BTN_WIDTH / 2, 10, BTN_WIDTH, 40), '#060D13'),
-    GameButton('점 다시 찍기', (WIDTH / 4 * 3 - BTN_WIDTH / 2, 10, BTN_WIDTH, 40), '#060D13')
-]
-line_list = []
-point_list = []
 
 def draw_screen():
     screen.fill('#ece6cc')
@@ -150,9 +128,6 @@ def remake_point():
     for i in tmp:
         point_list.append(Point(*i))
 
-app = QApplication(sys.argv)
-gui = SetCount()
-gui.close()
 def get_count(): 
     global point_count, speed
 
@@ -165,7 +140,7 @@ def get_count():
         speed = gui.speed_value
 
 def get_convex_hull():
-    global point_count, point_list, line_list, speed
+    global point_list, act_list
 
     def ccw(a, b, c):
         ret = (b.x - a.x) * (c.y - b.y) - (c.x - b.x) * (b.y - a.y)
@@ -190,42 +165,80 @@ def get_convex_hull():
     pp = sorted(point_list[1:], key=cmp_to_key(cmp))
 
     stk = [point_list[0]]
-    line_list = []
+    act_list = []
     for i in pp:
         while len(stk) >= 2 and ccw(stk[-2], stk[-1], i) <= 0:
-            time.sleep(speed)
-            line_list.append(Line(stk[-1].to_tuple(), i.to_tuple()))
-            draw_screen()
+            act_list.append((Line(stk[-1].to_tuple(), i.to_tuple()), True))
             stk.pop()
-            line_list.pop()
-            line_list.pop()
-        time.sleep(speed)
         stk.append(i)
-        line_list.append(Line(stk[-2].to_tuple(), stk[-1].to_tuple()))
-        draw_screen()
+        act_list.append((Line(stk[-2].to_tuple(), stk[-1].to_tuple()), False))
     
-    time.sleep(speed)
-    line_list.append(Line(stk[-1].to_tuple(), stk[0].to_tuple()))
-    draw_screen()
-    QMessageBox.information(None, '조아','볼록 껍질을 성공적으로 구했습니다.')
+    act_list.append((Line(stk[-1].to_tuple(), stk[0].to_tuple()), False))
+
+pygame.init()
+WIDTH = pygame.display.Info().current_w - 100
+HEIGHT = pygame.display.Info().current_h - 100
+BTN_WIDTH = 300
+POINT_AREA = (20, 80, WIDTH - 20, HEIGHT - 20)
+
+point_count = 30
+speed = 0.5
+state = 0
+run_count = 0
+act_idx = 0
+cycle = 0
+
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Convex Hull Algorithm(Graham's Scan) Visualizer")
+
+btn_list = [
+    GameButton('설정', (WIDTH / 4 - BTN_WIDTH / 2, 10, BTN_WIDTH, 40), '#060D13'), 
+    GameButton('볼록 껍질 구하기', (WIDTH / 4 * 2 - BTN_WIDTH / 2, 10, BTN_WIDTH, 40), '#060D13'),
+    GameButton('점 다시 찍기', (WIDTH / 4 * 3 - BTN_WIDTH / 2, 10, BTN_WIDTH, 40), '#060D13')
+]
+line_list = []
+act_list = []
+point_list = []
 
 btn_list[0].onclick = get_count
 btn_list[1].onclick = get_convex_hull
 btn_list[2].onclick = remake_point
+
+app = QApplication(sys.argv)
+gui = SetCount()
+gui.close()
 
 draw_screen()
 get_count()
 remake_point()
 
 while True:
+    pygame.time.Clock().tick(50)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             sys.exit()
         elif event.type == pygame.MOUSEBUTTONUP:
             pos = pygame.mouse.get_pos()
-            for b in btn_list:
+            for i, b in enumerate(btn_list):
                 if b.is_collide(pos):
+                    line_list = []
+                    state = 1 if i == 1 else 0
+                    cycle = int(50*speed)
+                    run_count = act_idx = 0
                     b.onclick()
                     break
+    if state == 1:
+        if run_count == 0:
+            if act_idx == len(act_list):
+                QMessageBox.information(None, '조아','볼록 껍질을 성공적으로 구했습니다.')
+                state = 0
+                continue
+            if act_idx and act_list[act_idx - 1][1]:
+                line_list.pop()
+                line_list.pop()
+            line_list.append(act_list[act_idx][0])
+            act_idx += 1
+        run_count = (run_count + 1) % cycle
+
     draw_screen()
     pygame.display.update()
